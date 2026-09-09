@@ -113,7 +113,7 @@ export const researchPrices = createServerFn({ method: "POST" })
       ],
       schemaName: "price_research",
       schema: researchSchema,
-      effort: "medium",
+      effort: "low",
     });
     return {
       ...research,
