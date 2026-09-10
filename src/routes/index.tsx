@@ -66,6 +66,9 @@ function Index() {
   const loopRef = useRef(true);
   const inflight = useRef(false);
   const pausedRef = useRef(false);
+  const sceneRef = useRef(0); // bumps whenever the view changes
+  const lastResultAt = useRef(0);
+
 
   useEffect(() => {
     setScans(loadScans());
@@ -76,7 +79,7 @@ function Index() {
     saveScans(next);
   }, []);
 
-  const grabFrame = useCallback((max = 768) => {
+  const grabFrame = useCallback((max = 512) => {
     const video = videoRef.current;
     if (!video || !video.videoWidth) return null;
     const canvas = document.createElement("canvas");
@@ -84,8 +87,49 @@ function Index() {
     canvas.width = video.videoWidth * scale;
     canvas.height = video.videoHeight * scale;
     canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.7);
+    return canvas.toDataURL("image/jpeg", max > 600 ? 0.75 : 0.6);
   }, []);
+
+  // Watch for panning: as soon as the view changes, drop the old boxes.
+  useEffect(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 32;
+    canvas.height = 24;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    let prev: Uint8ClampedArray | null = null;
+
+    const id = setInterval(() => {
+      const video = videoRef.current;
+      if (!ctx || !video || !video.videoWidth || pausedRef.current) return;
+      ctx.drawImage(video, 0, 0, 32, 24);
+      const now = ctx.getImageData(0, 0, 32, 24).data;
+      if (prev) {
+        let diff = 0;
+        for (let i = 0; i < now.length; i += 4) {
+          diff += Math.abs((now[i] ?? 0) - (prev[i] ?? 0));
+        }
+        const avg = diff / (now.length / 4);
+        if (avg > 14) {
+          sceneRef.current += 1; // invalidate any in-flight detection
+          setLive([]);
+        }
+      }
+      prev = new Uint8ClampedArray(now);
+    }, 200);
+
+    return () => clearInterval(id);
+  }, []);
+
+  // Expire boxes that are older than a couple of seconds.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (lastResultAt.current && Date.now() - lastResultAt.current > 2500) {
+        setLive((cur) => (cur.length ? [] : cur));
+      }
+    }, 500);
+    return () => clearInterval(id);
+  }, []);
+
 
   // Auto-start the rear camera and keep a detection loop running.
   useEffect(() => {
@@ -113,25 +157,34 @@ function Index() {
       }
     };
 
+    let pending = 0;
+
     const tick = async () => {
       while (loopRef.current && !cancelled) {
-        if (!pausedRef.current && !inflight.current) {
+        // Keep up to two requests in flight so panning updates fast.
+        if (!pausedRef.current && pending < 2) {
           const frame = grabFrame();
           if (frame) {
+            const scene = sceneRef.current;
+            pending += 1;
             inflight.current = true;
             setScanning(true);
-            try {
-              const out = await detect({ data: { image: frame } });
-              if (!cancelled) setLive(out.items ?? []);
-            } catch {
-              /* keep the loop alive on transient failures */
-            } finally {
-              inflight.current = false;
-              if (!cancelled) setScanning(false);
-            }
+            void detect({ data: { image: frame } })
+              .then((out) => {
+                // Discard results captured before the last pan.
+                if (cancelled || scene !== sceneRef.current) return;
+                lastResultAt.current = Date.now();
+                setLive(out.items ?? []);
+              })
+              .catch(() => undefined)
+              .finally(() => {
+                pending -= 1;
+                inflight.current = pending > 0;
+                if (!cancelled) setScanning(pending > 0);
+              });
           }
         }
-        await new Promise((r) => setTimeout(r, 900));
+        await new Promise((r) => setTimeout(r, 250));
       }
     };
 
