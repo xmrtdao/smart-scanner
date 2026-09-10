@@ -1,6 +1,56 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import type { Identification, PriceResearch } from "./thrift";
+import type { Identification, LiveItem, PriceResearch } from "./thrift";
+
+const DetectInput = z.object({ image: z.string().min(20) });
+
+const detectSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["items"],
+  properties: {
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["label", "bbox", "estValue", "note", "confidence"],
+        properties: {
+          label: { type: "string" },
+          bbox: { type: "array", items: { type: "number" } },
+          estValue: { type: "number" },
+          note: { type: "string" },
+          confidence: { type: "number" },
+        },
+      },
+    },
+  },
+} as const;
+
+export const detectItems = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => DetectInput.parse(input))
+  .handler(async ({ data }): Promise<{ items: LiveItem[] }> => {
+    const { askAstraJson } = await import("./ai.server");
+    const out = await askAstraJson<{ items: LiveItem[] }>({
+      instructions:
+        "You are a live resale-scanner vision model. Find every distinct resellable object in the frame (up to 12). For each: label (specific: brand/model when readable, else generic), bbox as [x, y, width, height] normalized 0-1 relative to the whole image, estValue = typical US secondhand resale price in USD, note = 3-6 word reason for the value (options, size, condition), confidence 0-1. If the frame shows many similar items (phones, TVs, shoes), box each one separately so they can be ranked by value. Return an empty items array if nothing resellable is visible. Never omit bbox.",
+      content: [
+        { type: "input_text", text: "Detect and value the items in this frame." },
+        { type: "input_image", image_url: data.image },
+      ],
+      schemaName: "live_items",
+      schema: detectSchema,
+      effort: "low",
+    });
+    const items = (Array.isArray(out.items) ? out.items : []).filter(
+      (i) =>
+        i &&
+        Array.isArray(i.bbox) &&
+        i.bbox.length === 4 &&
+        i.bbox.every((n) => typeof n === "number" && Number.isFinite(n)),
+    );
+    return { items };
+  });
 
 const IdentifyInput = z.object({
   image: z.string().min(20),

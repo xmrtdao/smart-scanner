@@ -29,6 +29,14 @@ export type Identification = {
   keywords: string[];
 };
 
+export type LiveItem = {
+  label: string;
+  bbox: number[];
+  estValue: number;
+  note: string;
+  confidence: number;
+};
+
 export type Scan = {
   id: string;
   createdAt: number;
