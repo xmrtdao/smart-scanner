@@ -1,0 +1,9 @@
+{
+  "appId": "com.xmrtdao.smartscanner",
+  "appName": "Smart Scanner",
+  "webDir": ".output/public",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  }
+}
