@@ -66,6 +66,9 @@ function Index() {
   const loopRef = useRef(true);
   const inflight = useRef(false);
   const pausedRef = useRef(false);
+  const sceneRef = useRef(0); // bumps whenever the view changes
+  const lastResultAt = useRef(0);
+
 
   useEffect(() => {
     setScans(loadScans());
