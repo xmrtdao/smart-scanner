@@ -79,7 +79,7 @@ function Index() {
     saveScans(next);
   }, []);
 
-  const grabFrame = useCallback((max = 768) => {
+  const grabFrame = useCallback((max = 512) => {
     const video = videoRef.current;
     if (!video || !video.videoWidth) return null;
     const canvas = document.createElement("canvas");
@@ -87,8 +87,49 @@ function Index() {
     canvas.width = video.videoWidth * scale;
     canvas.height = video.videoHeight * scale;
     canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.7);
+    return canvas.toDataURL("image/jpeg", max > 600 ? 0.75 : 0.6);
   }, []);
+
+  // Watch for panning: as soon as the view changes, drop the old boxes.
+  useEffect(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 32;
+    canvas.height = 24;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    let prev: Uint8ClampedArray | null = null;
+
+    const id = setInterval(() => {
+      const video = videoRef.current;
+      if (!ctx || !video || !video.videoWidth || pausedRef.current) return;
+      ctx.drawImage(video, 0, 0, 32, 24);
+      const now = ctx.getImageData(0, 0, 32, 24).data;
+      if (prev) {
+        let diff = 0;
+        for (let i = 0; i < now.length; i += 4) {
+          diff += Math.abs((now[i] ?? 0) - (prev[i] ?? 0));
+        }
+        const avg = diff / (now.length / 4);
+        if (avg > 14) {
+          sceneRef.current += 1; // invalidate any in-flight detection
+          setLive([]);
+        }
+      }
+      prev = new Uint8ClampedArray(now);
+    }, 200);
+
+    return () => clearInterval(id);
+  }, []);
+
+  // Expire boxes that are older than a couple of seconds.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (lastResultAt.current && Date.now() - lastResultAt.current > 2500) {
+        setLive((cur) => (cur.length ? [] : cur));
+      }
+    }, 500);
+    return () => clearInterval(id);
+  }, []);
+
 
   // Auto-start the rear camera and keep a detection loop running.
   useEffect(() => {
