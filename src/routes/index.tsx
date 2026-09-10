@@ -157,25 +157,34 @@ function Index() {
       }
     };
 
+    let pending = 0;
+
     const tick = async () => {
       while (loopRef.current && !cancelled) {
-        if (!pausedRef.current && !inflight.current) {
+        // Keep up to two requests in flight so panning updates fast.
+        if (!pausedRef.current && pending < 2) {
           const frame = grabFrame();
           if (frame) {
+            const scene = sceneRef.current;
+            pending += 1;
             inflight.current = true;
             setScanning(true);
-            try {
-              const out = await detect({ data: { image: frame } });
-              if (!cancelled) setLive(out.items ?? []);
-            } catch {
-              /* keep the loop alive on transient failures */
-            } finally {
-              inflight.current = false;
-              if (!cancelled) setScanning(false);
-            }
+            void detect({ data: { image: frame } })
+              .then((out) => {
+                // Discard results captured before the last pan.
+                if (cancelled || scene !== sceneRef.current) return;
+                lastResultAt.current = Date.now();
+                setLive(out.items ?? []);
+              })
+              .catch(() => undefined)
+              .finally(() => {
+                pending -= 1;
+                inflight.current = pending > 0;
+                if (!cancelled) setScanning(pending > 0);
+              });
           }
         }
-        await new Promise((r) => setTimeout(r, 900));
+        await new Promise((r) => setTimeout(r, 250));
       }
     };
 
