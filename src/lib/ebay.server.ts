@@ -5,17 +5,19 @@ const FIRECRAWL = "https://api.firecrawl.dev/v2/scrape";
 function parseListings(markdown: string): Comp[] {
   const lines = markdown.split("\n");
   const out: Comp[] = [];
+  const seen = new Set<string>();
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] ?? "";
-    const link = /^\[([^\]]{8,160})\]\((https?:\/\/[^)]*\/itm\/[^)]+)\)/.exec(line.trim());
+    const line = (lines[i] ?? "").trim();
+    const link = /^\[(.+?)\]\((https?:\/\/(?:www\.)?ebay\.com\/itm\/(\d+)[^)]*)\)/.exec(line);
     if (!link) continue;
-    const title = (link[1] ?? "").trim();
-    if (/^shop on ebay$/i.test(title)) continue;
+    const id = link[3] ?? "";
+    const title = (link[1] ?? "").replace(/Opens in a new window or tab\s*$/i, "").trim();
+    if (!title || /^(shop on ebay|watch )/i.test(title) || seen.has(id)) continue;
 
     let price = 0;
     let condition = "";
-    for (let j = i + 1; j < Math.min(i + 9, lines.length); j++) {
+    for (let j = i + 1; j < Math.min(i + 14, lines.length); j++) {
       const t = (lines[j] ?? "").trim();
       if (!t) continue;
       if (!price) {
@@ -25,12 +27,16 @@ function parseListings(markdown: string): Comp[] {
           continue;
         }
       }
-      if (!condition && /^(brand new|new \(other\)|new|pre-owned|open box|used|refurbished|parts only)/i.test(t)) {
+      if (
+        !condition &&
+        /^(brand new|new \(other\)|new|pre-owned|open box|used|refurbished|parts only)/i.test(t)
+      ) {
         condition = t;
       }
     }
 
     if (price > 0) {
+      seen.add(id);
       out.push({
         source: "eBay (live listing)",
         title: title.slice(0, 120),
@@ -44,6 +50,7 @@ function parseListings(markdown: string): Comp[] {
 
   return out;
 }
+
 
 /** Live eBay listing prices via Firecrawl. Returns [] when unavailable. */
 export async function fetchEbayComps(query: string): Promise<Comp[]> {
