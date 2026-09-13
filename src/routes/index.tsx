@@ -60,6 +60,8 @@ function Index() {
   const [scans, setScans] = useState<Scan[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [showList, setShowList] = useState(false);
+  const [blocked, setBlocked] = useState<string | null>(null);
+
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -160,8 +162,8 @@ function Index() {
 
     const tick = async () => {
       while (loopRef.current && !cancelled) {
-        // Keep up to two requests in flight so panning updates fast.
-        if (!pausedRef.current && pending < 2) {
+        // One request at a time: live scanning costs AI credits per frame.
+        if (!pausedRef.current && pending < 1) {
           const frame = grabFrame();
           if (frame) {
             const scene = sceneRef.current;
@@ -175,7 +177,14 @@ function Index() {
                 lastResultAt.current = Date.now();
                 setLive(out.items ?? []);
               })
-              .catch(() => undefined)
+              .catch((error: unknown) => {
+                const msg = error instanceof Error ? error.message : "";
+                // Out of credits / rate limited: stop hammering the gateway.
+                if (/credit|Too many requests|not configured/i.test(msg)) {
+                  loopRef.current = false;
+                  setBlocked(msg || "Live scanning is unavailable right now.");
+                }
+              })
               .finally(() => {
                 pending -= 1;
                 inflight.current = pending > 0;
@@ -183,9 +192,10 @@ function Index() {
               });
           }
         }
-        await new Promise((r) => setTimeout(r, 250));
+        await new Promise((r) => setTimeout(r, 700));
       }
     };
+
 
     void start();
     return () => {
