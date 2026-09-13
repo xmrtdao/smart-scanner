@@ -57,7 +57,8 @@ export const detectItems = createServerFn({ method: "POST" })
       );
       return { items };
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Live scanning is unavailable right now.";
+      const message =
+        error instanceof Error ? error.message : "Live scanning is unavailable right now.";
       if (/credit|Too many requests|not configured/i.test(message)) {
         return { items: [], unavailableReason: message };
       }
@@ -93,7 +94,10 @@ export const identifyItem = createServerFn({ method: "POST" })
       instructions:
         "You are an expert thrift-store reseller appraiser. Identify the item in the photo as precisely as possible: exact model or pattern names, brand, era, materials. Judge visible condition honestly. confidence is 0-1. details: up to 5 short observations (marks, wear, tags, model numbers). keywords: search terms a reseller would use on eBay. If unsure, say so in the name rather than inventing a model.",
       content: [
-        { type: "input_text", text: data.hint ? `Seller/tag info: ${data.hint}` : "Identify this item." },
+        {
+          type: "input_text",
+          text: data.hint ? `Seller/tag info: ${data.hint}` : "Identify this item.",
+        },
         { type: "input_image", image_url: data.image },
       ],
       schemaName: "identification",
@@ -178,7 +182,10 @@ export const researchPrices = createServerFn({ method: "POST" })
             searchTerms: data.keywords,
             askingPrice: data.askingPrice,
             liveEbay: stats
-              ? { ...stats, samples: liveComps.slice(0, 8).map((c) => ({ title: c.title, price: c.price })) }
+              ? {
+                  ...stats,
+                  samples: liveComps.slice(0, 8).map((c) => ({ title: c.title, price: c.price })),
+                }
               : null,
           }),
         },
@@ -201,4 +208,3 @@ export const researchPrices = createServerFn({ method: "POST" })
       risks: Array.isArray(research.risks) ? research.risks : [],
     };
   });
-
