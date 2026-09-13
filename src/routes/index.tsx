@@ -62,7 +62,6 @@ function Index() {
   const [showList, setShowList] = useState(false);
   const [blocked, setBlocked] = useState<string | null>(null);
 
-
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const loopRef = useRef(true);
@@ -70,7 +69,6 @@ function Index() {
   const pausedRef = useRef(false);
   const sceneRef = useRef(0); // bumps whenever the view changes
   const lastResultAt = useRef(0);
-
 
   useEffect(() => {
     setScans(loadScans());
@@ -130,8 +128,6 @@ function Index() {
     return () => clearInterval(id);
   }, []);
 
-
-
   // Auto-start the rear camera and keep a detection loop running.
   useEffect(() => {
     let cancelled = false;
@@ -154,7 +150,8 @@ function Index() {
         }
         void tick();
       } catch {
-        if (!cancelled) setCameraError("Camera access is blocked. Allow the camera to start scanning.");
+        if (!cancelled)
+          setCameraError("Camera access is blocked. Allow the camera to start scanning.");
       }
     };
 
@@ -172,6 +169,12 @@ function Index() {
             setScanning(true);
             void detect({ data: { image: frame } })
               .then((out) => {
+                if (out.unavailableReason) {
+                  loopRef.current = false;
+                  setLive([]);
+                  setBlocked(out.unavailableReason);
+                  return;
+                }
                 // Discard results captured before the last pan.
                 if (cancelled || scene !== sceneRef.current) return;
                 lastResultAt.current = Date.now();
@@ -195,7 +198,6 @@ function Index() {
         await new Promise((r) => setTimeout(r, 700));
       }
     };
-
 
     void start();
     return () => {
@@ -296,7 +298,9 @@ function Index() {
           <div>
             <h1 className="font-display text-base leading-none tracking-tight">Thrifty Picker</h1>
             <p className="text-[11px] text-white/70">
-              {scanning ? "Scanning…" : `${live.length} item${live.length === 1 ? "" : "s"} in view`}
+              {scanning
+                ? "Scanning…"
+                : `${live.length} item${live.length === 1 ? "" : "s"} in view`}
             </p>
           </div>
         </div>
@@ -395,14 +399,20 @@ function SavedSheet({
     <div className="absolute inset-0 z-10 flex flex-col bg-background/95 text-foreground backdrop-blur">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="font-display text-lg">Saved finds</h2>
-        <button onClick={onClose} aria-label="Back to camera" className="grid size-9 place-items-center rounded-lg border border-input">
+        <button
+          onClick={onClose}
+          aria-label="Back to camera"
+          className="grid size-9 place-items-center rounded-lg border border-input"
+        >
           <X className="size-4" />
         </button>
       </div>
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
         {current && <Detail scan={current} onDelete={() => onDelete(current.id)} />}
         {ranked.length === 0 && (
-          <p className="text-sm text-muted-foreground">Nothing saved yet — tap an item on the camera.</p>
+          <p className="text-sm text-muted-foreground">
+            Nothing saved yet — tap an item on the camera.
+          </p>
         )}
         <ul className="space-y-2">
           {ranked.map((s) => {
@@ -417,12 +427,16 @@ function SavedSheet({
                 >
                   <img src={s.image} alt="" className="size-12 rounded-lg object-cover" />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{s.identification.name}</span>
+                    <span className="block truncate text-sm font-medium">
+                      {s.identification.name}
+                    </span>
                     <span className="block text-xs text-muted-foreground">
                       List ~{money(s.research.suggestedListPrice)}
                     </span>
                   </span>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${toneClass[v.tone]}`}>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${toneClass[v.tone]}`}
+                  >
                     {v.label}
                   </span>
                 </button>
@@ -443,12 +457,18 @@ function Detail({ scan, onDelete }: { scan: Scan; onDelete: () => void }) {
     <div className="space-y-4 rounded-2xl border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <span className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${toneClass[v.tone]}`}>
+          <span
+            className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${toneClass[v.tone]}`}
+          >
             {v.label}
           </span>
           <h3 className="mt-2 font-display text-xl leading-tight">{scan.identification.name}</h3>
           <p className="text-sm text-muted-foreground">
-            {[scan.identification.brand, scan.identification.category, scan.identification.condition]
+            {[
+              scan.identification.brand,
+              scan.identification.category,
+              scan.identification.condition,
+            ]
               .filter(Boolean)
               .join(" · ")}
           </p>
