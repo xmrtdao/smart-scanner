@@ -336,6 +336,13 @@ function Index() {
         </div>
       )}
 
+      {blocked && (
+        <div className="absolute inset-x-3 top-20 rounded-xl border border-amber-400/40 bg-black/85 p-3 text-center text-xs backdrop-blur">
+          <p className="font-semibold text-amber-300">Live scanning paused</p>
+          <p className="mt-1 text-white/80">{blocked}</p>
+        </div>
+      )}
+
       {cameraError && (
         <div className="absolute inset-0 grid place-items-center bg-black/85 px-8 text-center text-sm">
           <div className="space-y-3">
