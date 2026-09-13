@@ -13,7 +13,7 @@ function parseListings(markdown: string): Comp[] {
     if (!link) continue;
     const id = link[3] ?? "";
     const title = (link[1] ?? "").replace(/Opens in a new window or tab\s*$/i, "").trim();
-    if (!title || /^(shop on ebay|watch )/i.test(title) || seen.has(id)) continue;
+    if (!title || title.startsWith("![") || /^(shop on ebay|watch )/i.test(title) || seen.has(id)) continue;
 
     let price = 0;
     let condition = "";
