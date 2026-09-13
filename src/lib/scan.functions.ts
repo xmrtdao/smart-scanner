@@ -145,9 +145,15 @@ export const researchPrices = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => ResearchInput.parse(input))
   .handler(async ({ data }): Promise<PriceResearch> => {
     const { askAstraJson } = await import("./ai.server");
+    const { fetchEbayComps, summarise } = await import("./ebay.server");
+
+    const query = [data.brand, data.name].filter(Boolean).join(" ") || data.keywords.join(" ");
+    const liveComps = await fetchEbayComps(query);
+    const stats = summarise(liveComps);
+
     const research = await askAstraJson<PriceResearch>({
       instructions:
-        "You are a resale market analyst. Estimate the current US secondhand resale market for the item, based on typical sold prices (eBay sold, Mercari, Poshmark, Facebook Marketplace, specialist markets). All prices in USD, net of shipping. Give 3-5 realistic comparable sold listings with plausible titles and prices — mark them as representative comps, never as scraped live data. sellSpeed is a short phrase like '2-4 weeks'. risks: up to 4 short warnings (fakes, shipping cost, restrictions, saturation). summary: 2 sentences of buy/pass reasoning for a reseller at the given asking price.",
+        "You are a resale market analyst. Estimate the current US secondhand resale market for the item. All prices in USD, net of shipping. If liveEbay stats are provided, anchor lowPrice/medianPrice/highPrice/suggestedListPrice to them — they are real current eBay asking prices — and adjust slightly downward for sold-vs-asking. Give 3-5 comparable listings with plausible titles and prices. sellSpeed is a short phrase like '2-4 weeks'. risks: up to 4 short warnings (fakes, shipping cost, restrictions, saturation). summary: 2 sentences of buy/pass reasoning for a reseller at the given asking price.",
       content: [
         {
           type: "input_text",
@@ -158,6 +164,9 @@ export const researchPrices = createServerFn({ method: "POST" })
             condition: data.condition,
             searchTerms: data.keywords,
             askingPrice: data.askingPrice,
+            liveEbay: stats
+              ? { ...stats, samples: liveComps.slice(0, 8).map((c) => ({ title: c.title, price: c.price })) }
+              : null,
           }),
         },
       ],
@@ -165,11 +174,18 @@ export const researchPrices = createServerFn({ method: "POST" })
       schema: researchSchema,
       effort: "low",
     });
+
+    const aiComps = Array.isArray(research.comps)
+      ? research.comps.filter((c) => c && typeof c.price === "number")
+      : [];
+
     return {
       ...research,
-      comps: Array.isArray(research.comps)
-        ? research.comps.filter((c) => c && typeof c.price === "number")
-        : [],
+      lowPrice: stats ? stats.low : research.lowPrice,
+      medianPrice: stats ? stats.median : research.medianPrice,
+      highPrice: stats ? stats.high : research.highPrice,
+      comps: liveComps.length ? [...liveComps.slice(0, 6), ...aiComps.slice(0, 2)] : aiComps,
       risks: Array.isArray(research.risks) ? research.risks : [],
     };
   });
+
