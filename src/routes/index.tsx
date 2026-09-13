@@ -172,6 +172,12 @@ function Index() {
             setScanning(true);
             void detect({ data: { image: frame } })
               .then((out) => {
+                 if (out.unavailableReason) {
+                   loopRef.current = false;
+                   setLive([]);
+                   setBlocked(out.unavailableReason);
+                   return;
+                 }
                 // Discard results captured before the last pan.
                 if (cancelled || scene !== sceneRef.current) return;
                 lastResultAt.current = Date.now();
