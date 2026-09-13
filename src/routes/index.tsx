@@ -109,10 +109,8 @@ function Index() {
           diff += Math.abs((now[i] ?? 0) - (prev[i] ?? 0));
         }
         const avg = diff / (now.length / 4);
-        if (avg > 14) {
-          sceneRef.current += 1; // invalidate any in-flight detection
-          setLive([]);
-        }
+        // Only a genuine pan (not handheld shake) invalidates in-flight work.
+        if (avg > 38) sceneRef.current += 1;
       }
       prev = new Uint8ClampedArray(now);
     }, 200);
@@ -120,15 +118,16 @@ function Index() {
     return () => clearInterval(id);
   }, []);
 
-  // Expire boxes that are older than a couple of seconds.
+  // Expire boxes that no longer have fresh results behind them.
   useEffect(() => {
     const id = setInterval(() => {
-      if (lastResultAt.current && Date.now() - lastResultAt.current > 2500) {
+      if (lastResultAt.current && Date.now() - lastResultAt.current > 5000) {
         setLive((cur) => (cur.length ? [] : cur));
       }
     }, 500);
     return () => clearInterval(id);
   }, []);
+
 
 
   // Auto-start the rear camera and keep a detection loop running.
